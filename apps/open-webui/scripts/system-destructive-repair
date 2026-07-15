@@ -1,0 +1,59 @@
+#!/bin/bash
+set -euo pipefail
+
+# Open WebUI system-destructive-repair
+# Wipes all Open WebUI data — chat history, user accounts, settings, and
+# downloaded AI models — then restarts everything from a clean state.
+# This is like reinstalling the app from scratch.
+
+CONFIG_FILE="${1:-}"
+INSTANCE_ID="${INSTANCE_ID:-unknown}"
+INSTALL_PATH="${INSTALL_PATH:-/tmp}"
+APP_DATA_PATH="${APP_DATA_PATH:-${INSTALL_PATH}/data}"
+COMPOSE_FILE="${COMPOSE_FILE:-${INSTALL_PATH}/docker-compose.yml}"
+
+if [ -z "$CONFIG_FILE" ] || [ ! -f "$CONFIG_FILE" ]; then
+    echo "No config file provided" >&2
+    exit 1
+fi
+
+HTTP_PORT=$(jq -r '.http_port // 3000' "$CONFIG_FILE" 2>/dev/null || echo "3000")
+ENABLE_OLLAMA=$(jq -r '.enable_ollama // true' "$CONFIG_FILE" 2>/dev/null || echo "true")
+
+echo ">> [open-webui] Starting destructive repair for instance ${INSTANCE_ID}"
+echo ">> [open-webui] WARNING: All chat history, accounts, settings, and AI models will be deleted"
+
+# 1. Stop all containers
+if command -v podman >/dev/null 2>&1; then
+    echo ">> [open-webui] Stopping containers"
+    podman compose -f "$COMPOSE_FILE" down 2>/dev/null || true
+fi
+
+# 2. Wipe Open WebUI data (chat history, users, settings)
+echo ">> [open-webui] Removing Open WebUI data"
+rm -rf "${APP_DATA_PATH:?}/webui-data"/* 2>/dev/null || true
+
+# 3. If local models are enabled, wipe downloaded AI models
+if [ "$ENABLE_OLLAMA" = "true" ]; then
+    echo ">> [open-webui] Removing downloaded AI models"
+    rm -rf "${APP_DATA_PATH:?}/ollama-models"/* 2>/dev/null || true
+fi
+
+# 4. Start containers
+if command -v podman >/dev/null 2>&1; then
+    echo ">> [open-webui] Starting containers"
+    podman compose -f "$COMPOSE_FILE" up -d 2>/dev/null || true
+fi
+
+# 5. Wait for Open WebUI to be healthy
+echo ">> [open-webui] Waiting for Open WebUI to start..."
+for i in $(seq 1 60); do
+    if curl -sf "http://localhost:${HTTP_PORT}/health" >/dev/null 2>&1; then
+        echo ">> [open-webui] Open WebUI is healthy with a fresh start"
+        exit 0
+    fi
+    sleep 3
+done
+
+echo ">> [open-webui] Open WebUI did not become healthy after destructive repair" >&2
+exit 1

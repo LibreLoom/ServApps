@@ -1,0 +1,55 @@
+#!/bin/bash
+set -euo pipefail
+
+# Open WebUI system-setup
+# Waits for Open WebUI to be healthy, then pulls a small default AI model
+# so you can start chatting right away (if local models are enabled).
+
+CONFIG_FILE="${1:-}"
+INSTANCE_ID="${INSTANCE_ID:-unknown}"
+INSTALL_PATH="${INSTALL_PATH:-/tmp}"
+COMPOSE_FILE="${COMPOSE_FILE:-${INSTALL_PATH}/docker-compose.yml}"
+
+if [ -z "$CONFIG_FILE" ] || [ ! -f "$CONFIG_FILE" ]; then
+    echo "No config file provided" >&2
+    exit 1
+fi
+
+HTTP_PORT=$(jq -r '.http_port // 3000' "$CONFIG_FILE" 2>/dev/null || echo "3000")
+ENABLE_OLLAMA=$(jq -r '.enable_ollama // true' "$CONFIG_FILE" 2>/dev/null || echo "true")
+
+echo ">> [open-webui] Waiting for Open WebUI to start..."
+for i in $(seq 1 60); do
+    if curl -sf "http://localhost:${HTTP_PORT}/health" >/dev/null 2>&1; then
+        echo ">> [open-webui] Open WebUI is ready."
+        break
+    fi
+    sleep 3
+done
+
+if ! curl -sf "http://localhost:${HTTP_PORT}/health" >/dev/null 2>&1; then
+    echo ">> [open-webui] Open WebUI did not become healthy within 3 minutes" >&2
+    exit 1
+fi
+
+# If local models are enabled, pull a small default model so the user
+# can start chatting immediately without manually downloading one.
+if [ "$ENABLE_OLLAMA" = "true" ]; then
+    echo ">> [open-webui] Local AI models enabled — pulling a small default model..."
+    echo ">> [open-webui] This will download about 400 MB and may take a few minutes."
+
+    # Pull the model inside the Ollama container
+    if command -v podman >/dev/null 2>&1; then
+        podman exec "${INSTANCE_ID}-ollama" ollama pull qwen2.5:0.5b 2>&1 || {
+            echo ">> [open-webui] Could not download the default model automatically." >&2
+            echo ">> [open-webui] You can download models later from Open WebUI's admin settings." >&2
+        }
+    fi
+
+    echo ">> [open-webui] Default model ready. You can download more models from the admin settings."
+else
+    echo ">> [open-webui] Local AI models are not enabled."
+    echo ">> [open-webui] To use Open WebUI, connect an external AI service from the admin settings after logging in."
+fi
+
+echo ">> [open-webui] Setup complete."

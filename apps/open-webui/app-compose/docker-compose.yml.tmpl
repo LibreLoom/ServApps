@@ -1,0 +1,70 @@
+services:
+  open-webui:
+    image: ghcr.io/open-webui/open-webui:main
+    container_name: "{{.instance_id}}-open-webui"
+    restart: unless-stopped
+    ports:
+      - "{{.http_port}}:8080"
+    environment:
+      - WEBUI_AUTH=true
+      - WEBUI_SECRET_KEY={{.webui_secret_key}}
+      - ENABLE_LOGIN_FORM=false
+      - ENABLE_OAUTH_SIGNUP=true
+      - OAUTH_MERGE_ACCOUNTS_BY_EMAIL=true
+      - OAUTH_CLIENT_ID={{.oidc_client_id}}
+      - OAUTH_CLIENT_SECRET={{.oidc_client_secret}}
+      - OPENID_PROVIDER_URL={{.oidc_issuer}}
+      - OPENID_REDIRECT_URI={{.oidc_redirect_uris}}
+      - OAUTH_SCOPES=openid email profile
+      - WEBUI_AUTH_COOKIE_SAME_SITE=lax
+      - WEBUI_AUTH_COOKIE_SECURE=true
+      {{if .enable_ollama}}
+      - OLLAMA_BASE_URL=http://ollama:11434
+      {{end}}
+      - ENABLE_SIGNUP=false
+      - SCARF_NO_ANALYTICS=true
+      - DO_NOT_TRACK=true
+      - ANONYMIZED_TELEMETRY=false
+    volumes:
+      - "{{ dataPath }}/webui-data:/app/backend/data:z"
+    labels:
+      - "libreserv.app={{.instance_id}}"
+      - "libreserv.app.name={{.app_name}}"
+    cap_drop:
+      - ALL
+    {{if .enable_ollama}}
+    depends_on:
+      - ollama
+    {{end}}
+    networks:
+      - open-webui-net
+
+  {{if .enable_ollama}}
+  ollama:
+    image: ollama/ollama:latest
+    container_name: "{{.instance_id}}-ollama"
+    restart: unless-stopped
+    volumes:
+      - "{{ dataPath }}/ollama-models:/root/.ollama:z"
+    labels:
+      - "libreserv.app={{.instance_id}}"
+      - "libreserv.app.component=ollama"
+    cap_drop:
+      - ALL
+    {{if .enable_gpu}}
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities:
+                - gpu
+    {{end}}
+    networks:
+      - open-webui-net
+  {{end}}
+
+networks:
+  open-webui-net:
+    driver: bridge

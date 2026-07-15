@@ -1,0 +1,112 @@
+id: open-webui
+name: Open WebUI
+description: A self-hosted AI chat interface — chat with local AI models or connect to external AI services like OpenAI, with your conversations staying private on your own server
+version: 0.6.5
+category: ai
+website: https://openwebui.com
+repository: https://github.com/open-webui/open-webui
+featured: true
+
+oidc_redirect_path: /oauth/oidc/callback
+
+deployment:
+  compose_file: app-compose/docker-compose.yml.tmpl
+  ports:
+    - host: 3000
+      container: 8080
+      protocol: tcp
+      name: ui
+  volumes:
+    - name: webui-data
+      mount_path: /app/backend/data
+    - name: ollama-models
+      mount_path: /root/.ollama
+  restart_policy: unless-stopped
+
+configuration:
+  - name: http_port
+    label: Web Port
+    description: The port your chat page opens on in your browser
+    type: port
+    default: 3000
+    required: true
+    advanced: true
+  - name: webui_secret_key
+    label: Session Secret Key
+    description: A secret key used to keep your login session secure — automatically generated if left blank
+    type: password
+    required: false
+    advanced: true
+  - name: enable_ollama
+    label: Local AI Models
+    description: Bundle a local AI model runner (Ollama) so you can chat with AI models that run entirely on your own server. Turn this off if you want to connect to an external AI service instead, like OpenAI or a cloud provider you already use.
+    type: boolean
+    default: true
+    required: false
+  - name: enable_gpu
+    label: Use Graphics Card
+    description: Use your NVIDIA graphics card to run AI models faster. Only works if you have an NVIDIA GPU installed and the Local AI Models option is turned on. Most home servers don't need this unless you plan to run large AI models.
+    type: boolean
+    default: false
+    required: false
+    advanced: true
+
+exposed_info:
+  - name: webui_secret_key
+    label: Session Secret Key
+    description: The secret key used to keep your login sessions secure
+    type: password
+    group: credentials
+    copyable: true
+    revealable: true
+    mask_by_default: true
+    advanced: true
+
+health_check:
+  type: http
+  endpoint: /health
+  port: 3000
+  interval: 30s
+  timeout: 10s
+  retries: 5
+
+requirements:
+  min_ram: "2G"
+  min_cpu: 1
+  min_disk: "10G"
+  arch:
+    - amd64
+    - arm64
+
+updates:
+  strategy: notify
+  backup_before_update: true
+
+scripts:
+  system:
+    setup: scripts/system-setup
+    repair: scripts/system-repair
+    destructive_repair:
+      script: scripts/system-destructive-repair
+      description: Deletes all chat history, user accounts, settings, and downloaded AI models. Open WebUI starts fresh as if just installed — all conversations and customizations are lost.
+
+features:
+  read_only: false
+  no_uninstall: false
+  experimental: false
+  requires_root: false
+  requires_gpu: false
+  supported_os:
+    - linux
+  min_ram: 2048
+  min_cpu: 2
+  access_model: internal
+  backup: supported
+  update_behavior:
+    automatic: false
+    requires_downtime: true
+    supports_rollback: true
+  custom_domains: true
+  resource_hints:
+    single_instance: true
+    privileged_required: false

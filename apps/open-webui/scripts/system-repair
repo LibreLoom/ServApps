@@ -1,0 +1,56 @@
+#!/bin/bash
+set -euo pipefail
+
+# Open WebUI system-repair
+# Restarts the containers and checks whether Open WebUI is healthy.
+# If local AI models are enabled, also restarts the model runner and
+# checks that Open WebUI can reach it.
+
+CONFIG_FILE="${1:-}"
+INSTANCE_ID="${INSTANCE_ID:-unknown}"
+INSTALL_PATH="${INSTALL_PATH:-/tmp}"
+COMPOSE_FILE="${COMPOSE_FILE:-${INSTALL_PATH}/docker-compose.yml}"
+
+if [ -z "$CONFIG_FILE" ] || [ ! -f "$CONFIG_FILE" ]; then
+    echo "No config file provided" >&2
+    exit 1
+fi
+
+HTTP_PORT=$(jq -r '.http_port // 3000' "$CONFIG_FILE" 2>/dev/null || echo "3000")
+ENABLE_OLLAMA=$(jq -r '.enable_ollama // true' "$CONFIG_FILE" 2>/dev/null || echo "true")
+
+echo ">> [open-webui] Starting repair for instance ${INSTANCE_ID}"
+
+# 1. Check if Open WebUI is responding
+if ! curl -sf "http://localhost:${HTTP_PORT}/health" >/dev/null 2>&1; then
+    echo ">> [open-webui] Open WebUI is not responding — restarting"
+    if command -v podman >/dev/null 2>&1; then
+        podman compose -f "$COMPOSE_FILE" restart open-webui 2>/dev/null || true
+        sleep 5
+    fi
+fi
+
+# 2. If local models are enabled, restart the model runner
+if [ "$ENABLE_OLLAMA" = "true" ]; then
+    echo ">> [open-webui] Restarting local AI model runner"
+    if command -v podman >/dev/null 2>&1; then
+        podman compose -f "$COMPOSE_FILE" restart ollama 2>/dev/null || true
+        sleep 5
+    fi
+
+    # Give Open WebUI a moment to reconnect to the model runner
+    sleep 5
+fi
+
+# 3. Wait for Open WebUI to be healthy
+echo ">> [open-webui] Checking health..."
+for i in $(seq 1 30); do
+    if curl -sf "http://localhost:${HTTP_PORT}/health" >/dev/null 2>&1; then
+        echo ">> [open-webui] Repair complete — app is healthy"
+        exit 0
+    fi
+    sleep 3
+done
+
+echo ">> [open-webui] Open WebUI is still not responding after repair" >&2
+exit 1
