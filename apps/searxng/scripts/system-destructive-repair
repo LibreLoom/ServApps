@@ -1,0 +1,101 @@
+#!/bin/bash
+set -euo pipefail
+
+# SearXNG system-destructive-repair
+# Wipes all SearXNG data — config, cache, and Valkey database — then
+# regenerates settings.yml from the original config and restarts.
+# All cached results, rate-limit data, and custom settings are lost.
+
+CONFIG_FILE="${1:-}"
+INSTANCE_ID="${INSTANCE_ID:-unknown}"
+INSTALL_PATH="${INSTALL_PATH:-/tmp}"
+APP_DATA_PATH="${APP_DATA_PATH:-${INSTALL_PATH}/data}"
+CONFIG_DIR="${INSTALL_PATH}/config/searxng"
+COMPOSE_FILE="${COMPOSE_FILE:-${INSTALL_PATH}/docker-compose.yml}"
+
+if [ -z "$CONFIG_FILE" ] || [ ! -f "$CONFIG_FILE" ]; then
+    echo "No config file provided" >&2
+    exit 1
+fi
+
+HTTP_PORT=$(jq -r '.http_port // 8080' "$CONFIG_FILE" 2>/dev/null || echo "8080")
+
+echo ">> [searxng] Starting destructive repair for instance ${INSTANCE_ID}"
+echo ">> [searxng] WARNING: All config, cache, and Valkey data will be deleted"
+
+# 1. Stop all containers
+if command -v podman >/dev/null 2>&1; then
+    echo ">> [searxng] Stopping containers"
+    podman compose -f "$COMPOSE_FILE" down 2>/dev/null || true
+fi
+
+# 2. Wipe SearXNG config, cache, and Valkey data
+echo ">> [searxng] Removing all data files"
+rm -rf "${CONFIG_DIR:?}"/* 2>/dev/null || true
+rm -rf "${APP_DATA_PATH:?}/searxng-cache"/* 2>/dev/null || true
+rm -rf "${APP_DATA_PATH:?}/valkey-data"/* 2>/dev/null || true
+
+# 3. Regenerate settings.yml from config
+echo ">> [searxng] Regenerating settings.yml"
+
+SECRET_KEY=$(jq -r '.secret_key // empty' "$CONFIG_FILE" 2>/dev/null || echo "")
+if [ -z "$SECRET_KEY" ]; then
+    SECRET_KEY=$(openssl rand -hex 32)
+fi
+
+SAFE_SEARCH=$(jq -r '.safe_search // "off"' "$CONFIG_FILE" 2>/dev/null || echo "off")
+API_FORMATS=$(jq -r '.api_formats // "html_only"' "$CONFIG_FILE" 2>/dev/null || echo "html_only")
+AUTOCOMPLETE=$(jq -r '.autocomplete // "none"' "$CONFIG_FILE" 2>/dev/null || echo "none")
+BASE_URL=$(jq -r '.server_url // ""' "$CONFIG_FILE" 2>/dev/null || echo "")
+
+case "$SAFE_SEARCH" in
+    "moderate") SAFE_SEARCH_VAL=1 ;;
+    "strict")   SAFE_SEARCH_VAL=2 ;;
+    *)          SAFE_SEARCH_VAL=0 ;;
+esac
+
+case "$API_FORMATS" in
+    "html_json") FORMATS='[html, json]' ;;
+    "all")       FORMATS='[html, csv, json, rss]' ;;
+    *)           FORMATS='[html]' ;;
+esac
+
+mkdir -p "$CONFIG_DIR"
+cat > "$CONFIG_DIR/settings.yml" <<SETTINGS_EOF
+use_default_settings: true
+
+server:
+  secret_key: "${SECRET_KEY}"
+  image_proxy: true
+  limiter: true
+  base_url: "${BASE_URL}"
+
+search:
+  safe_search: ${SAFE_SEARCH_VAL}
+  autocomplete: "${AUTOCOMPLETE}"
+  formats: ${FORMATS}
+
+valkey:
+  url: valkey://valkey:6379/0
+SETTINGS_EOF
+
+echo ">> [searxng] settings.yml regenerated"
+
+# 4. Start containers
+if command -v podman >/dev/null 2>&1; then
+    echo ">> [searxng] Starting containers"
+    podman compose -f "$COMPOSE_FILE" up -d 2>/dev/null || true
+fi
+
+# 5. Wait for health
+echo ">> [searxng] Waiting for SearXNG to become healthy..."
+for i in $(seq 1 30); do
+    if curl -sf "http://localhost:${HTTP_PORT}/healthz" >/dev/null 2>&1; then
+        echo ">> [searxng] SearXNG is healthy with fresh config"
+        exit 0
+    fi
+    sleep 2
+done
+
+echo ">> [searxng] SearXNG did not become healthy after destructive repair" >&2
+exit 1

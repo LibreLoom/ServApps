@@ -1,0 +1,133 @@
+id: searxng
+name: SearXNG
+description: Privacy-focused metasearch engine that aggregates results from over 70 search services without tracking or profiling you
+version: 2026.7.13
+category: search
+website: https://searxng.org
+repository: https://github.com/searxng/searxng
+featured: true
+
+deployment:
+  compose_file: app-compose/docker-compose.yml.tmpl
+  ports:
+    - host: 8080
+      container: 8080
+      protocol: tcp
+      name: ui
+  volumes:
+    - name: searxng-config
+      mount_path: /etc/searxng
+    - name: searxng-data
+      mount_path: /var/cache/searxng
+    - name: valkey-data
+      mount_path: /data
+  restart_policy: unless-stopped
+
+configuration:
+  - name: http_port
+    label: Web Port
+    description: The port your search page opens on in your browser
+    type: port
+    default: 8080
+    required: true
+    advanced: true
+  - name: secret_key
+    label: Secret Key
+    description: A secret key used to sign session cookies — automatically generated if left blank
+    type: password
+    required: false
+    advanced: true
+  - name: safe_search
+    label: Safe Search
+    description: Filters explicit content from search results. Moderate blocks adult content; Strict blocks adult, violent, and drug-related content.
+    type: select
+    options:
+      - "off"
+      - "moderate"
+      - "strict"
+    default: "off"
+    required: false
+  - name: api_formats
+    label: API Access
+    description: Controls which response formats SearXNG exposes. HTML-only is most private. Enabling JSON or other formats allows other apps and scripts to query SearXNG programmatically.
+    type: select
+    options:
+      - "html_only"
+      - "html_json"
+      - "all"
+    default: "html_only"
+    required: false
+    advanced: true
+  - name: autocomplete
+    label: Autocomplete
+    description: Shows search suggestions as you type. DuckDuckGo and Brave are privacy-focused; startpage may send queries to its provider.
+    type: select
+    options:
+      - "none"
+      - "duckduckgo"
+      - "brave"
+      - "startpage"
+    default: "none"
+    required: false
+    advanced: true
+
+
+exposed_info:
+  - name: secret_key
+    label: Secret Key
+    description: The secret key used to sign session cookies
+    type: password
+    group: credentials
+    copyable: true
+    revealable: true
+    mask_by_default: true
+    advanced: true
+
+health_check:
+  type: http
+  endpoint: /healthz
+  port: 8080
+  interval: 30s
+  timeout: 5s
+  retries: 3
+
+requirements:
+  min_ram: "256M"
+  min_cpu: 0.25
+  min_disk: "500M"
+  arch:
+    - amd64
+    - arm64
+
+updates:
+  strategy: notify
+  backup_before_update: true
+
+scripts:
+  system:
+    setup: scripts/system-setup
+    repair: scripts/system-repair
+    destructive_repair:
+      script: scripts/system-destructive-repair
+      description: Deletes the SearXNG configuration, cache, and Valkey database. SearXNG is reconfigured from scratch — all settings, cached results, and rate-limit data are lost.
+
+features:
+  read_only: false
+  no_uninstall: false
+  experimental: false
+  requires_root: false
+  requires_gpu: false
+  supported_os:
+    - linux
+  min_ram: 256
+  min_cpu: 1
+  access_model: external
+  backup: supported
+  update_behavior:
+    automatic: false
+    requires_downtime: true
+    supports_rollback: true
+  custom_domains: true
+  resource_hints:
+    single_instance: true
+    privileged_required: false

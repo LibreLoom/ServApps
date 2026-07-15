@@ -1,0 +1,88 @@
+#!/bin/bash
+set -euo pipefail
+
+# SearXNG system-setup
+# Generates settings.yml from the user's configuration choices, then
+# waits for SearXNG and Valkey to be healthy.
+
+CONFIG_FILE="${1:-}"
+INSTANCE_ID="${INSTANCE_ID:-unknown}"
+INSTALL_PATH="${INSTALL_PATH:-/tmp}"
+CONFIG_DIR="${INSTALL_PATH}/config/searxng"
+
+if [ -z "$CONFIG_FILE" ] || [ ! -f "$CONFIG_FILE" ]; then
+    echo "No config file provided" >&2
+    exit 1
+fi
+
+# Extract config values
+HTTP_PORT=$(jq -r '.http_port // 8080' "$CONFIG_FILE" 2>/dev/null || echo "8080")
+SECRET_KEY=$(jq -r '.secret_key // empty' "$CONFIG_FILE" 2>/dev/null || echo "")
+SAFE_SEARCH=$(jq -r '.safe_search // "off"' "$CONFIG_FILE" 2>/dev/null || echo "off")
+API_FORMATS=$(jq -r '.api_formats // "html_only"' "$CONFIG_FILE" 2>/dev/null || echo "html_only")
+AUTOCOMPLETE=$(jq -r '.autocomplete // "none"' "$CONFIG_FILE" 2>/dev/null || echo "none")
+BASE_URL=$(jq -r '.server_url // ""' "$CONFIG_FILE" 2>/dev/null || echo "")
+
+# Generate secret key if not provided
+if [ -z "$SECRET_KEY" ]; then
+    SECRET_KEY=$(openssl rand -hex 32)
+fi
+
+# Map safe_search to SearXNG numeric values
+case "$SAFE_SEARCH" in
+    "moderate") SAFE_SEARCH_VAL=1 ;;
+    "strict")   SAFE_SEARCH_VAL=2 ;;
+    *)          SAFE_SEARCH_VAL=0 ;;
+esac
+
+# Map api_formats to SearXNG formats list
+case "$API_FORMATS" in
+    "html_json") FORMATS='[html, json]' ;;
+    "all")       FORMATS='[html, csv, json, rss]' ;;
+    *)           FORMATS='[html]' ;;
+esac
+
+# Generate settings.yml
+mkdir -p "$CONFIG_DIR"
+cat > "$CONFIG_DIR/settings.yml" <<SETTINGS_EOF
+use_default_settings: true
+
+server:
+  secret_key: "${SECRET_KEY}"
+  image_proxy: true
+  limiter: true
+  base_url: "${BASE_URL}"
+
+search:
+  safe_search: ${SAFE_SEARCH_VAL}
+  autocomplete: "${AUTOCOMPLETE}"
+  formats: ${FORMATS}
+
+valkey:
+  url: valkey://valkey:6379/0
+SETTINGS_EOF
+
+echo ">> [searxng] settings.yml generated"
+echo ">> [searxng] safe_search=${SAFE_SEARCH} autocomplete=${AUTOCOMPLETE} api_formats=${API_FORMATS}"
+
+# Output exposed_info for LibreServ
+cat <<EOF
+{
+  "exposed_info": {
+    "secret_key": "${SECRET_KEY}"
+  }
+}
+EOF
+
+# Wait for SearXNG to be ready
+echo ">> [searxng] Waiting for SearXNG to start..."
+for i in $(seq 1 30); do
+    if curl -sf "http://localhost:${HTTP_PORT}/healthz" >/dev/null 2>&1; then
+        echo ">> [searxng] SearXNG is ready."
+        exit 0
+    fi
+    sleep 2
+done
+
+echo ">> [searxng] SearXNG did not become healthy within 60 seconds" >&2
+exit 1

@@ -1,0 +1,6 @@
+app_id: searxng
+channel: stable
+versions:
+  - tag: "2026.7.13"
+    status: approved
+    approved_at: "2026-07-13T00:00:00Z"

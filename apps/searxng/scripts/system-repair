@@ -1,0 +1,62 @@
+#!/bin/bash
+set -euo pipefail
+
+# SearXNG system-repair
+# Non-destructive: restarts Valkey, clears SearXNG cache, and verifies health.
+
+CONFIG_FILE="${1:-}"
+INSTANCE_ID="${INSTANCE_ID:-unknown}"
+INSTALL_PATH="${INSTALL_PATH:-/tmp}"
+APP_DATA_PATH="${APP_DATA_PATH:-${INSTALL_PATH}/data}"
+COMPOSE_FILE="${COMPOSE_FILE:-${INSTALL_PATH}/docker-compose.yml}"
+
+if [ -z "$CONFIG_FILE" ] || [ ! -f "$CONFIG_FILE" ]; then
+    echo "No config file provided" >&2
+    exit 1
+fi
+
+HTTP_PORT=$(jq -r '.http_port // 8080' "$CONFIG_FILE" 2>/dev/null || echo "8080")
+
+echo ">> [searxng] Starting repair for instance ${INSTANCE_ID}"
+
+# 1. Check if the container is responding
+if ! curl -sf "http://localhost:${HTTP_PORT}/healthz" >/dev/null 2>&1; then
+    echo ">> [searxng] Container not responding — attempting restart"
+    if command -v podman >/dev/null 2>&1; then
+        podman compose -f "$COMPOSE_FILE" restart searxng 2>/dev/null || true
+        sleep 5
+    fi
+fi
+
+# 2. Clear SearXNG cache (forces fresh search results)
+CACHE_DIR="${APP_DATA_PATH}/searxng-cache"
+if [ -d "$CACHE_DIR" ]; then
+    echo ">> [searxng] Clearing search cache"
+    rm -rf "${CACHE_DIR:?}"/* 2>/dev/null || true
+fi
+
+# 3. Restart Valkey if it's not running
+if command -v podman >/dev/null 2>&1; then
+    echo ">> [searxng] Restarting Valkey"
+    podman compose -f "$COMPOSE_FILE" restart valkey 2>/dev/null || true
+    sleep 3
+fi
+
+# 4. Restart SearXNG to pick up clean cache and fresh Valkey connection
+if command -v podman >/dev/null 2>&1; then
+    echo ">> [searxng] Restarting SearXNG"
+    podman compose -f "$COMPOSE_FILE" restart searxng 2>/dev/null || true
+fi
+
+# 5. Wait for health
+echo ">> [searxng] Waiting for SearXNG to become healthy..."
+for i in $(seq 1 30); do
+    if curl -sf "http://localhost:${HTTP_PORT}/healthz" >/dev/null 2>&1; then
+        echo ">> [searxng] Repair completed — app is healthy"
+        exit 0
+    fi
+    sleep 2
+done
+
+echo ">> [searxng] App still unhealthy after repair" >&2
+exit 1
