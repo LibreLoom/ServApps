@@ -1,0 +1,59 @@
+#!/bin/bash
+set -euo pipefail
+
+# ConvertX system-destructive-repair
+# Wipes all ConvertX data — database, uploads, and output files — then
+# lets ConvertX recreate everything from scratch on next start.
+# The app will be in a fresh state with no history or converted files.
+
+CONFIG_FILE="${1:-}"
+INSTANCE_ID="${INSTANCE_ID:-unknown}"
+INSTALL_PATH="${INSTALL_PATH:-/tmp}"
+APP_DATA_PATH="${APP_DATA_PATH:-${INSTALL_PATH}/data}"
+COMPOSE_FILE="${COMPOSE_FILE:-${INSTALL_PATH}/docker-compose.yml}"
+
+if [ -z "$CONFIG_FILE" ] || [ ! -f "$CONFIG_FILE" ]; then
+    echo "No config file provided" >&2
+    exit 1
+fi
+
+HTTP_PORT=$(jq -r '.http_port // 3000' "$CONFIG_FILE" 2>/dev/null || echo "3000")
+
+echo ">> [convertx] Starting destructive repair for instance ${INSTANCE_ID}"
+echo ">> [convertx] WARNING: All data will be permanently deleted"
+
+# 1. Stop the container so we can safely wipe data
+if command -v podman >/dev/null 2>&1; then
+    echo ">> [convertx] Stopping containers"
+    podman compose -f "$COMPOSE_FILE" down 2>/dev/null || true
+fi
+
+# 2. Wipe the entire data directory
+if [ -d "$APP_DATA_PATH" ]; then
+    echo ">> [convertx] Removing all data files"
+    rm -rf "${APP_DATA_PATH:?}"/*
+    rm -rf "${APP_DATA_PATH:?}"/.* 2>/dev/null || true
+fi
+
+# 3. Recreate the empty data directory
+mkdir -p "$APP_DATA_PATH"
+echo ">> [convertx] Data directory recreated"
+
+# 4. Start the container back up
+if command -v podman >/dev/null 2>&1; then
+    echo ">> [convertx] Starting containers"
+    podman compose -f "$COMPOSE_FILE" up -d 2>/dev/null || true
+fi
+
+# 5. Wait for ConvertX to initialize the fresh database
+echo ">> [convertx] Waiting for ConvertX to initialize..."
+for i in $(seq 1 30); do
+    if curl -sf "http://localhost:${HTTP_PORT}/healthcheck" >/dev/null 2>&1; then
+        echo ">> [convertx] ConvertX is healthy with a fresh database"
+        exit 0
+    fi
+    sleep 2
+done
+
+echo ">> [convertx] ConvertX did not become healthy after destructive repair" >&2
+exit 1

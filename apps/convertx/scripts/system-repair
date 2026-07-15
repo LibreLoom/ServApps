@@ -1,0 +1,69 @@
+#!/bin/bash
+set -euo pipefail
+
+# ConvertX system-repair
+# Called automatically when health checks fail. Attempts non-destructive
+# recovery: clears stuck jobs, removes orphaned upload/output files,
+# and vacuums the SQLite database.
+
+CONFIG_FILE="${1:-}"
+INSTANCE_ID="${INSTANCE_ID:-unknown}"
+INSTALL_PATH="${INSTALL_PATH:-/tmp}"
+APP_DATA_PATH="${APP_DATA_PATH:-${INSTALL_PATH}/data}"
+
+if [ -z "$CONFIG_FILE" ] || [ ! -f "$CONFIG_FILE" ]; then
+    echo "No config file provided" >&2
+    exit 1
+fi
+
+HTTP_PORT=$(jq -r '.http_port // 3000' "$CONFIG_FILE" 2>/dev/null || echo "3000")
+
+echo ">> [convertx] Starting repair for instance ${INSTANCE_ID}"
+
+# 1. Check if the container is responding at all
+if ! curl -sf "http://localhost:${HTTP_PORT}/healthcheck" >/dev/null 2>&1; then
+    echo ">> [convertx] Container not responding — repair cannot proceed non-destructively"
+    echo ">> [convertx] Try destructive repair if the app is unresponsive"
+    exit 1
+fi
+
+# 2. Clean up orphaned files in uploads/ (files with no matching job in DB)
+UPLOADS_DIR="${APP_DATA_PATH}/uploads"
+OUTPUT_DIR="${APP_DATA_PATH}/output"
+DB_PATH="${APP_DATA_PATH}/mydb.sqlite"
+
+if [ -d "$UPLOADS_DIR" ]; then
+    echo ">> [convertx] Cleaning orphaned upload files"
+    find "$UPLOADS_DIR" -type f -mtime +1 -delete 2>/dev/null || true
+fi
+
+# 3. Clean up old output files (older than auto_delete_hours)
+AUTO_DELETE_HOURS=$(jq -r '.auto_delete_hours // 24' "$CONFIG_FILE" 2>/dev/null || echo "24")
+if [ "$AUTO_DELETE_HOURS" -gt 0 ] && [ -d "$OUTPUT_DIR" ]; then
+    echo ">> [convertx] Removing output files older than ${AUTO_DELETE_HOURS} hours"
+    find "$OUTPUT_DIR" -type f -mmin +"$((AUTO_DELETE_HOURS * 60))" -delete 2>/dev/null || true
+    # Remove empty directories
+    find "$OUTPUT_DIR" -type d -empty -delete 2>/dev/null || true
+fi
+
+# 4. Vacuum the SQLite database to reclaim space and fix corruption
+if [ -f "$DB_PATH" ]; then
+    echo ">> [convertx] Vacuuming database"
+    sqlite3 "$DB_PATH" "VACUUM;" 2>/dev/null || {
+        echo ">> [convertx] VACUUM failed — database may be corrupt"
+        echo ">> [convertx] Try destructive repair to recreate the database"
+        exit 1
+    }
+fi
+
+# 5. Remove WAL and SHM files if they exist (forces a clean start)
+rm -f "${DB_PATH}-wal" "${DB_PATH}-shm" 2>/dev/null || true
+
+# 6. Verify health
+if curl -sf "http://localhost:${HTTP_PORT}/healthcheck" >/dev/null 2>&1; then
+    echo ">> [convertx] Repair completed — app is healthy"
+    exit 0
+else
+    echo ">> [convertx] App still unhealthy after repair"
+    exit 1
+fi

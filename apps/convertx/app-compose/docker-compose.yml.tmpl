@@ -1,0 +1,28 @@
+services:
+  convertx:
+    image: ghcr.io/c4illin/convertx:latest
+    container_name: "{{.instance_id}}-convertx"
+    restart: unless-stopped
+    ports:
+      - "{{.http_port}}:3000"
+    environment:
+      - PORT=3000
+      - HTTP_ALLOWED=false
+      - ACCOUNT_REGISTRATION=false
+      - ALLOW_UNAUTHENTICATED=true
+      - AUTO_DELETE_EVERY_N_HOURS={{.auto_delete_hours}}
+      - MAX_CONVERT_PROCESS={{.max_conversions}}
+      - TZ=UTC
+    volumes:
+      - "{{ dataPath }}/convertx-data:/app/data:z"
+    labels:
+      - "libreserv.app={{.instance_id}}"
+      - "libreserv.app.name={{.app_name}}"
+    cap_drop:
+      - ALL
+    networks:
+      - convertx-net
+
+networks:
+  convertx-net:
+    driver: bridge

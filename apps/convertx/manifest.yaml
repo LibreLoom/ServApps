@@ -1,0 +1,6 @@
+app_id: convertx
+channel: stable
+versions:
+  - tag: "0.10.0"
+    status: approved
+    approved_at: "2026-07-13T00:00:00Z"

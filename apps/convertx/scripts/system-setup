@@ -1,0 +1,27 @@
+#!/bin/bash
+set -euo pipefail
+
+# ConvertX system-setup script
+# ConvertX runs in unauthenticated mode — no account creation needed.
+# This script waits for the container to be healthy and confirms readiness.
+
+CONFIG_FILE="${1:-}"
+HTTP_PORT="${HTTP_PORT:-3000}"
+
+if [ -z "$CONFIG_FILE" ] || [ ! -f "$CONFIG_FILE" ]; then
+    echo "No config file provided" >&2
+    exit 1
+fi
+
+# Wait for ConvertX to be ready
+echo "Waiting for ConvertX to start..."
+for i in $(seq 1 30); do
+    if curl -sf "http://localhost:${HTTP_PORT}/healthcheck" >/dev/null 2>&1; then
+        echo "ConvertX is ready."
+        exit 0
+    fi
+    sleep 2
+done
+
+echo "ConvertX did not become healthy within 60 seconds" >&2
+exit 1
