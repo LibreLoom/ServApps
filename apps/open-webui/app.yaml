@@ -43,13 +43,6 @@ configuration:
     type: boolean
     default: true
     required: false
-  - name: enable_gpu
-    label: Use Graphics Card
-    description: Use your NVIDIA graphics card to run AI models faster. Only works if you have an NVIDIA GPU and local models are turned on. Most home servers don't need this unless you plan to run large AI models.
-    type: boolean
-    default: false
-    required: false
-    advanced: true
 
 exposed_info:
   - name: webui_secret_key

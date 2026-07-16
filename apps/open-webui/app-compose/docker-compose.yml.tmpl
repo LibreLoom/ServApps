@@ -51,7 +51,7 @@ services:
       - "libreserv.app.component=ollama"
     cap_drop:
       - ALL
-    {{if .enable_gpu}}
+    {{if hasGPU}}
     deploy:
       resources:
         reservations:
