@@ -1,6 +1,6 @@
 id: convertx
 name: ConvertX
-description: Self-hosted online file converter supporting over a thousand formats — documents, images, audio, video, e-books, and more
+description: Convert files between over a thousand formats — documents, images, audio, video, e-books, and more — right in your browser, without uploading them to someone else's server
 version: 0.10.0
 category: utility
 website: https://github.com/C4illin/ConvertX
@@ -22,7 +22,7 @@ deployment:
 configuration:
   - name: http_port
     label: Web Port
-    description: The port your app's web page opens on in your browser
+    description: The web port your app opens on. You should not need to change this unless another app is already using the default.
     type: port
     default: 3000
     required: true
@@ -30,13 +30,13 @@ configuration:
     advanced: true
   - name: auto_delete_hours
     label: Auto-Delete After (hours)
-    description: How long to keep converted files before automatically deleting them. Set to 0 to disable.
+    description: How long to keep converted files before automatically deleting them. Set to 0 to keep them until you manually remove them.
     type: number
     default: 24
     required: false
   - name: max_conversions
     label: Max Concurrent Conversions
-    description: Maximum number of conversions running at the same time. Set to 0 for unlimited.
+    description: How many files ConvertX can convert at the same time. Set to 0 for no limit. Lower this if your server feels slow while converting files.
     type: number
     default: 0
     required: false
@@ -69,7 +69,7 @@ scripts:
     repair: scripts/system-repair
     destructive_repair:
       script: scripts/system-destructive-repair
-      description: Deletes all converted files, upload history, and the database. ConvertX starts fresh as if just installed — all conversion history is lost.
+      description: Deletes all converted files, upload history, and saved data. ConvertX starts over as if just installed — everything is wiped and cannot be recovered.
 
 features:
   read_only: false

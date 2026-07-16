@@ -1,6 +1,6 @@
 id: searxng
 name: SearXNG
-description: Privacy-focused metasearch engine that aggregates results from over 70 search services without tracking or profiling you
+description: A private search page that pulls results from over 70 search engines without tracking you or building a profile of what you search for
 version: 2026.7.13
 category: search
 website: https://searxng.org
@@ -26,20 +26,20 @@ deployment:
 configuration:
   - name: http_port
     label: Web Port
-    description: The port your search page opens on in your browser
+    description: The web port your search page opens on. You should not need to change this unless another app is already using the default.
     type: port
     default: 8080
     required: true
     advanced: true
   - name: secret_key
-    label: Secret Key
-    description: A secret key used to sign session cookies — automatically generated if left blank
+    label: Security Key
+    description: A long random password that keeps your search sessions secure — automatically generated if left blank
     type: password
     required: false
     advanced: true
   - name: safe_search
     label: Safe Search
-    description: Filters explicit content from search results. Moderate blocks adult content; Strict blocks adult, violent, and drug-related content.
+    description: Hides adult content from your search results. Moderate blocks the most explicit content; Strict also blocks violent and drug-related content.
     type: select
     options:
       - "off"
@@ -49,7 +49,7 @@ configuration:
     required: false
   - name: api_formats
     label: API Access
-    description: Controls which response formats SearXNG exposes. HTML-only is most private. Enabling JSON or other formats allows other apps and scripts to query SearXNG programmatically.
+    description: Controls whether other apps and tools can query SearXNG automatically. Web-only is most private. Enabling machine-readable formats lets other apps send searches to SearXNG and read the results back.
     type: select
     options:
       - "html_only"
@@ -60,7 +60,7 @@ configuration:
     advanced: true
   - name: autocomplete
     label: Autocomplete
-    description: Shows search suggestions as you type. DuckDuckGo and Brave are privacy-focused; startpage may send queries to its provider.
+    description: Shows search suggestions as you type. DuckDuckGo and Brave are privacy-friendly; Startpage may share what you type with its search provider.
     type: select
     options:
       - "none"
@@ -74,8 +74,8 @@ configuration:
 
 exposed_info:
   - name: secret_key
-    label: Secret Key
-    description: The secret key used to sign session cookies
+    label: Security Key
+    description: The secret key used to keep your search sessions secure
     type: password
     group: credentials
     copyable: true
@@ -109,7 +109,7 @@ scripts:
     repair: scripts/system-repair
     destructive_repair:
       script: scripts/system-destructive-repair
-      description: Deletes the SearXNG configuration, cache, and Valkey database. SearXNG is reconfigured from scratch — all settings, cached results, and rate-limit data are lost.
+      description: Deletes the SearXNG configuration, cached search results, and the Valkey database. SearXNG starts over with a fresh configuration — all settings, saved results, and bot protection data are lost.
 
 features:
   read_only: false

@@ -1,6 +1,6 @@
 id: open-webui
 name: Open WebUI
-description: A self-hosted AI chat interface — chat with local AI models or connect to external AI services like OpenAI, with your conversations staying private on your own server
+description: A private AI chat assistant — talk to AI models that run on your own server, or connect to external AI services like OpenAI. Your conversations stay on your server, not on someone else's.
 version: 0.6.5
 category: ai
 website: https://openwebui.com
@@ -26,26 +26,26 @@ deployment:
 configuration:
   - name: http_port
     label: Web Port
-    description: The port your chat page opens on in your browser
+    description: The web port your chat page opens on. You should not need to change this unless another app is already using the default.
     type: port
     default: 3000
     required: true
     advanced: true
   - name: webui_secret_key
-    label: Session Secret Key
-    description: A secret key used to keep your login session secure — automatically generated if left blank
+    label: Security Key
+    description: A long random password that keeps your chat login secure — automatically generated if left blank
     type: password
     required: false
     advanced: true
   - name: enable_ollama
     label: Local AI Models
-    description: Bundle a local AI model runner (Ollama) so you can chat with AI models that run entirely on your own server. Turn this off if you want to connect to an external AI service instead, like OpenAI or a cloud provider you already use.
+    description: Bundle a local AI model runner so you can chat with AI models that run entirely on your own server. Turn this off if you want to connect to an external AI service instead, like OpenAI or another provider you already use.
     type: boolean
     default: true
     required: false
   - name: enable_gpu
     label: Use Graphics Card
-    description: Use your NVIDIA graphics card to run AI models faster. Only works if you have an NVIDIA GPU installed and the Local AI Models option is turned on. Most home servers don't need this unless you plan to run large AI models.
+    description: Use your NVIDIA graphics card to run AI models faster. Only works if you have an NVIDIA GPU and local models are turned on. Most home servers don't need this unless you plan to run large AI models.
     type: boolean
     default: false
     required: false
@@ -53,8 +53,8 @@ configuration:
 
 exposed_info:
   - name: webui_secret_key
-    label: Session Secret Key
-    description: The secret key used to keep your login sessions secure
+    label: Security Key
+    description: The secret key used to keep your chat login secure
     type: password
     group: credentials
     copyable: true
@@ -88,7 +88,7 @@ scripts:
     repair: scripts/system-repair
     destructive_repair:
       script: scripts/system-destructive-repair
-      description: Deletes all chat history, user accounts, settings, and downloaded AI models. Open WebUI starts fresh as if just installed — all conversations and customizations are lost.
+      description: Deletes all chat history, user accounts, settings, and downloaded AI models. Open WebUI starts over as if just installed — all conversations and customizations are wiped and cannot be recovered.
 
 features:
   read_only: false
