@@ -1,0 +1,48 @@
+#!/bin/bash
+set -euo pipefail
+
+# Paperless-ngx system-setup
+# Generates the secret key if not provided, waits for the webserver
+# and its dependencies (database, broker, Gotenberg, Tika) to be healthy.
+
+CONFIG_FILE="${1:-}"
+INSTANCE_ID="${INSTANCE_ID:-unknown}"
+INSTALL_PATH="${INSTALL_PATH:-/tmp}"
+
+if [ -z "$CONFIG_FILE" ] || [ ! -f "$CONFIG_FILE" ]; then
+    echo "No config file provided" >&2
+    exit 1
+fi
+
+HTTP_PORT=$(jq -r '.http_port // 8000' "$CONFIG_FILE" 2>/dev/null || echo "8000")
+SECRET_KEY=$(jq -r '.secret_key // empty' "$CONFIG_FILE" 2>/dev/null || echo "")
+
+# Generate secret key if not provided
+if [ -z "$SECRET_KEY" ]; then
+    SECRET_KEY=$(openssl rand -hex 32)
+fi
+
+echo ">> [paperless-ngx] Waiting for Paperless to start..."
+for i in $(seq 1 60); do
+    if curl -sf -L --max-time 2 "http://localhost:${HTTP_PORT}/" >/dev/null 2>&1; then
+        echo ">> [paperless-ngx] Paperless is ready."
+        break
+    fi
+    sleep 3
+done
+
+if ! curl -sf -L --max-time 2 "http://localhost:${HTTP_PORT}/" >/dev/null 2>&1; then
+    echo ">> [paperless-ngx] Paperless did not become healthy within 3 minutes" >&2
+    exit 1
+fi
+
+# Output exposed_info for LibreServ
+cat <<EOF
+{
+  "exposed_info": {
+    "secret_key": "${SECRET_KEY}"
+  }
+}
+EOF
+
+echo ">> [paperless-ngx] Setup complete."

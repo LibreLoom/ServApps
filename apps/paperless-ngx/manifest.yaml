@@ -1,0 +1,6 @@
+app_id: paperless-ngx
+channel: stable
+versions:
+  - tag: "3.0.0"
+    status: approved
+    approved_at: "2026-07-13T00:00:00Z"

@@ -1,0 +1,113 @@
+id: paperless-ngx
+name: Paperless-ngx
+description: Scan, organize, and search your documents — receipts, mail, contracts, and more. Paperless reads text from images and PDFs so you can find any document by searching for words inside it.
+version: 3.0.0
+category: productivity
+website: https://docs.paperless-ngx.com
+repository: https://github.com/paperless-ngx/paperless-ngx
+featured: true
+
+oidc_redirect_path: /accounts/oidc/libreserv/login/callback/
+
+deployment:
+  compose_file: app-compose/docker-compose.yml.tmpl
+  ports:
+    - host: 8000
+      container: 8000
+      protocol: tcp
+      name: ui
+  volumes:
+    - name: paperless-data
+      mount_path: /usr/src/paperless/data
+    - name: paperless-media
+      mount_path: /usr/src/paperless/media
+    - name: paperless-consume
+      mount_path: /usr/src/paperless/consume
+    - name: paperless-export
+      mount_path: /usr/src/paperless/export
+    - name: paperless-db
+      mount_path: /var/lib/postgresql/data
+    - name: paperless-broker
+      mount_path: /data
+  restart_policy: unless-stopped
+
+configuration:
+  - name: http_port
+    label: Web Port
+    description: The web port your document page opens on. You should not need to change this unless another app is already using the default.
+    type: port
+    default: 8000
+    required: true
+    advanced: true
+  - name: secret_key
+    label: Security Key
+    description: A long random password that keeps your document sessions secure — automatically generated if left blank
+    type: password
+    required: false
+    advanced: true
+  - name: ocr_language
+    label: OCR Language
+    description: The language Paperless uses when reading text from scanned documents. Set this to the language most of your documents are written in. Use a 3-letter code like "eng" for English, "deu" for German, or "fra" for French.
+    type: string
+    default: eng
+    required: false
+
+exposed_info:
+  - name: secret_key
+    label: Security Key
+    description: The security key used to keep your document sessions secure
+    type: password
+    group: credentials
+    copyable: true
+    revealable: true
+    mask_by_default: true
+    advanced: true
+
+health_check:
+  type: http
+  endpoint: /
+  port: 8000
+  interval: 30s
+  timeout: 10s
+  retries: 5
+
+requirements:
+  min_ram: "2G"
+  min_cpu: 1
+  min_disk: "5G"
+  arch:
+    - amd64
+    - arm64
+
+updates:
+  strategy: notify
+  backup_before_update: true
+
+scripts:
+  system:
+    setup: scripts/system-setup
+    repair: scripts/system-repair
+    destructive_repair:
+      script: scripts/system-destructive-repair
+      description: Deletes all documents, tags, saved views, and the database. Paperless starts over as if just installed — everything is wiped and cannot be recovered.
+
+features:
+  read_only: false
+  no_uninstall: false
+  experimental: false
+  requires_root: false
+  requires_gpu: false
+  supported_os:
+    - linux
+  min_ram: 2048
+  min_cpu: 2
+  access_model: internal
+  backup: supported
+  update_behavior:
+    automatic: false
+    requires_downtime: true
+    supports_rollback: true
+  custom_domains: true
+  resource_hints:
+    single_instance: true
+    privileged_required: false
