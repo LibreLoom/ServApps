@@ -6,6 +6,7 @@ category: search
 website: https://searxng.org
 repository: https://github.com/searxng/searxng
 featured: true
+access_model: external
 
 deployment:
   compose_file: app-compose/docker-compose.yml.tmpl
@@ -121,7 +122,6 @@ features:
     - linux
   min_ram: 256
   min_cpu: 1
-  access_model: external
   backup: supported
   update_behavior:
     automatic: false

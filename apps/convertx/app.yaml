@@ -6,6 +6,7 @@ category: utility
 website: https://github.com/C4illin/ConvertX
 repository: https://github.com/C4illin/ConvertX
 featured: true
+access_model: external
 
 deployment:
   compose_file: app-compose/docker-compose.yml.tmpl
@@ -81,7 +82,6 @@ features:
     - linux
   min_ram: 512
   min_cpu: 1
-  access_model: external
   backup: supported
   update_behavior:
     automatic: false
