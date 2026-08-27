@@ -71,23 +71,3 @@ scripts:
     destructive_repair:
       script: scripts/system-destructive-repair
       description: Deletes all converted files, upload history, and saved data. ConvertX starts over as if just installed — everything is wiped and cannot be recovered.
-
-features:
-  read_only: false
-  no_uninstall: false
-  experimental: false
-  requires_root: false
-  requires_gpu: false
-  supported_os:
-    - linux
-  min_ram: 512
-  min_cpu: 1
-  backup: supported
-  update_behavior:
-    automatic: false
-    requires_downtime: true
-    supports_rollback: true
-  custom_domains: true
-  resource_hints:
-    single_instance: true
-    privileged_required: false
