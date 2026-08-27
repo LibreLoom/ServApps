@@ -29,7 +29,7 @@ services:
       - PAPERLESS_SOCIALACCOUNT_ALLOW_SIGNUPS=false
       - PAPERLESS_DISABLE_REGULAR_LOGIN=true
       - PAPERLESS_REDIRECT_LOGIN_TO_SSO=true
-      - PAPERLESS_LOGOUT_REDIRECT_URL={{ logoutURL }}
+      - PAPERLESS_LOGOUT_REDIRECT_URL={{ serverURL }}
     volumes:
       - "{{ dataPath }}/paperless-data:/usr/src/paperless/data:z"
       - "{{ dataPath }}/paperless-media:/usr/src/paperless/media:z"
